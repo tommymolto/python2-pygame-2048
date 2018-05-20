@@ -11,6 +11,7 @@ from enum import Enum
 
 tamanhoQuadrado = 100 # tamanho do quadrado em pixels
 linhasNoJogo = 7  # area de x por x quadrados
+limiteJogo = 128
 class Movimentos(Enum):
     """Enumerator com os movimentos possiveis"""
     cima = 0
@@ -48,16 +49,16 @@ class JogoEstado(object):
         for y in range(self.tamanho):
             for x in range(self.tamanho):
                 
-                # draw square of particular item to screen w/ 1 thick border
+                # desenha quadradinho da posicao x y com borda
                 quadradinho = pygame.Rect(x*tamanhoQuadrado+1, y*tamanhoQuadrado+1, tamanhoQuadrado-2, tamanhoQuadrado-2)
                 pygame.draw.rect(tela, self.pegaCorQuadrado(self.pegaItem(x, y)), quadradinho)
-                if self.pegaItem(x, y) == None: continue # se nao existe item, desenha vazio
+                if self.pegaItem(x, y) == None: continue # se nao existe item, desenha vazio e sai
                 texto = fonte.render(str(self.pegaItem(x, y)), 1, (249, 246, 242) if self.pegaItem(x, y) >= 8 else (119, 110, 101))
-                # Center text onto tile
+                # centra o texto no quadrado
                 textoQuadradinho = texto.get_rect()
                 textoQuadradinho.centerx = quadradinho.centerx
                 textoQuadradinho.centery = quadradinho.centery
-                screen.blit(texto, textoQuadradinho)  # blit number to respective square
+                screen.blit(texto, textoQuadradinho)  # colcoar o numero no quadradinho
 
     def __eq__(self, other):
         """Verifica iguadade entre 2 jogos."""
@@ -86,27 +87,30 @@ class JogoEstado(object):
 
 
 class SessaoJogo(object):
-    def __init__(self, tamanho):
+    
+    def __init__(self, tamanho, maximo):
         self.JogoEstado = JogoEstado(tamanho)
         self.acabou = False
+        self.maximoValor = maximo
+        self.maximoAtual = 2
 
     def desenhaNaTela(self, tela):
         self.JogoEstado.desenhaNaTela(tela)
 
-    def proximoMovimento(self, move):
-        """Advance game to next move."""
-        self.moveTodosQuadradosNaDirecao(move)
+    def proximoMovimento(self, movimento):
+        """Executa a proxima jogada."""
+        self.moveTodosQuadradosNaDirecao(movimento)
         self.verificaFimJogo()
-        state = self.JogoEstado
-        isFull = all([state.pegaItem(x,y)!=None for x in range(self.JogoEstado.tamanho) for y in range(self.JogoEstado.tamanho)])
-        if not isFull: self.adicionaRandomicamenteValor(2)
+        estadoJogo = self.JogoEstado
+        lotouTela = all([estadoJogo.pegaItem(x,y)!=None for x in range(self.JogoEstado.tamanho) for y in range(self.JogoEstado.tamanho)])
+        if not lotouTela: self.adicionaRandomicamenteValor(2)
 
     def moveTodosQuadradosNaDirecao(self, move):
-        """Move all items in a particular direction."""
+        """Move todos os quadrados em uma direcao."""
         ultimoEstado = JogoEstado(self.JogoEstado.tamanho)
 
-        while not self.JogoEstado == ultimoEstado:  # Keep trying to move each item until none can be moved
-            # Loop through each item in list
+        while not self.JogoEstado == ultimoEstado:  # tenta mover ate que ninguem possa ser movido
+            # Loop em cada item da lista
             ultimoEstado = copy.deepcopy(self.JogoEstado)
             for y in range(self.JogoEstado.tamanho):
                 for x in range(self.JogoEstado.tamanho):
@@ -121,23 +125,25 @@ class SessaoJogo(object):
                     elif move == Movimentos.direita and x<self.JogoEstado.tamanho-1:
                         self.mudaUmItemPara([x, y], [x+1, y])
 
-    def mudaUmItemPara(self, xyInicial, xyFinal): # shiftOneItemTo(self, startCoords, endCoords):
-        """Shift a specific item at startCoords to endCoords.
-        If endCoords has an item identical to at startCoords, add the two together. If none at endcoords, shift to there. Else, do nothing."""
-        startVal = self.JogoEstado.pegaItem(xyInicial[0], xyInicial[1])
-        endVal = self.JogoEstado.pegaItem(xyFinal[0], xyFinal[1])
+    def mudaUmItemPara(self, xyInicial, xyFinal): 
+        """Muda um elementto de xyInicial a xyFinal
+        Se ele esta indo para um xy que tem um valor igual, soma
+        Se não há ninguem nas coordenadas, o muda para la
+        Senão, beleza, só vai :)."""
+        valorInicio = self.JogoEstado.pegaItem(xyInicial[0], xyInicial[1])
+        valorFim = self.JogoEstado.pegaItem(xyFinal[0], xyFinal[1])
 
-        if endVal == None:
-            self.JogoEstado.setaItem(xyFinal[0], xyFinal[1], startVal)
-        elif startVal == endVal:
-            self.JogoEstado.setaItem(xyFinal[0], xyFinal[1], startVal+endVal)
+        if valorFim == None:
+            self.JogoEstado.setaItem(xyFinal[0], xyFinal[1], valorInicio)
+        elif valorInicio == valorFim:
+            self.JogoEstado.setaItem(xyFinal[0], xyFinal[1], valorInicio+valorFim)
         else:
             return None
         self.JogoEstado.setaItem(xyInicial[0], xyInicial[1], None)
 
     def adicionaRandomicamenteValor(self, val):
-        """Add new number with value 'val' to array in random location when move is done"""
-        while True:  # Keep selecting random points until one with nothing in it is found
+        """Adiciona valor ao array em lugar randomico ao fim da jogada"""
+        while True:  # vai selecionando lugares randomicos ate que um que tenha lugar seja encontrado
             x = random.randint(0, self.JogoEstado.tamanho-1)
             y = random.randint(0, self.JogoEstado.tamanho-1)
             if self.JogoEstado.pegaItem(x, y) == None:
@@ -146,15 +152,24 @@ class SessaoJogo(object):
             else: continue
 
     def verificaFimJogo(self):
-        """Use to update whether game is over or not."""
+        """Verifica se o jogo acabou."""
         self.acabou = True
-        isEmpty = all([self.JogoEstado.pegaItem(x,y)==None for x in range(self.JogoEstado.tamanho) for y in range(self.JogoEstado.tamanho)])
-        # check if any movements are possible, if not, game is over
+        estaVazio = all([self.JogoEstado.pegaItem(x,y)==None for x in range(self.JogoEstado.tamanho) for y in range(self.JogoEstado.tamanho)])
+        # verifica se tem movimentos possiveis, senao, acabou
         movLs = [Movimentos.cima, Movimentos.baixo, Movimentos.direita, Movimentos.esquerda]
         gameMoves = [copy.deepcopy(self) for i in range(len(movLs))]
         for i in range(len(movLs)): gameMoves[i].moveTodosQuadradosNaDirecao(movLs[i])
-        if isEmpty or not all([self.JogoEstado == x.JogoEstado for x in gameMoves]):
+        #print(self.JogoEstado.data)
+        for x in self.JogoEstado.data:
+           if any(y is not None for y in x):
+               z = max([i for i in x if i is not None])
+               if z > self.maximoAtual:
+                   self.maximoAtual  = z
+        print(self.maximoAtual)
+        if estaVazio or not all([self.JogoEstado == x.JogoEstado for x in gameMoves]) or self.maximoAtual == self.maximoValor:
             self.acabou = False
+        if self.maximoAtual  == self.maximoValor:
+            print("Acabou")
 
 
 
@@ -169,10 +184,10 @@ screen = pygame.display.set_mode(
     )
 pygame.display.set_caption('2048')
 
-gameSession = SessaoJogo(linhasNoJogo)
+gameSession = SessaoJogo(linhasNoJogo, limiteJogo)
 
 while not gameSession.acabou:
-    pygame.draw.rect(screen, (0,0,255), pygame.Rect(0, 0, tamanhoQuadrado*linhasNoJogo, tamanhoQuadrado*linhasNoJogo))  # clear the screen with black
+    pygame.draw.rect(screen, (0,0,255), pygame.Rect(0, 0, tamanhoQuadrado*linhasNoJogo, tamanhoQuadrado*linhasNoJogo))  
     gameSession.desenhaNaTela(screen)
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN and event.key in moveDict.keys():
